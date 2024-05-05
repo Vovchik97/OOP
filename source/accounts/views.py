@@ -115,7 +115,7 @@ class SignUpView(GuestOnlyView, FormView):
             code = get_random_string(20)
 
             act = Activation()
-            act.code = code
+            act.set_code(code)
             act.user = user
             act.save()
 
@@ -171,7 +171,7 @@ class ResendActivationCodeView(GuestOnlyView, FormView):
         code = get_random_string(20)
 
         act = Activation()
-        act.code = code
+        act.set_code(code)
         act.user = user
         act.save()
 
@@ -249,7 +249,7 @@ class ChangeEmailView(LoginRequiredMixin, FormView):
             code = get_random_string(20)
 
             act = Activation()
-            act.code = code
+            act.set_code(code)
             act.user = user
             act.email = email
             act.save()
