@@ -13,6 +13,13 @@ def send_mail(to, template, context):
     msg.attach_alternative(html_content, 'text/html')
     msg.send()
 
+def send_verification_code_email(to, code):
+    context = {
+        'subject': _('Your login verification code'),
+        'code': code,
+    }
+    send_mail(to, 'verification_code', context)
+
 
 def send_activation_email(request, email, code):
     context = {

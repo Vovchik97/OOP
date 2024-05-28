@@ -19,14 +19,15 @@ from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.debug import sensitive_post_parameters
 from django.views.generic import View, FormView
 from django.conf import settings
+from django.contrib.auth.models import User
 
 from .utils import (
-    send_activation_email, send_reset_password_email, send_forgotten_username_email, send_activation_change_email,
+    send_activation_email, send_reset_password_email, send_forgotten_username_email, send_activation_change_email, send_verification_code_email,
 )
 from .forms import (
     SignInViaUsernameForm, SignInViaEmailForm, SignInViaEmailOrUsernameForm, SignUpForm,
     RestorePasswordForm, RestorePasswordViaEmailOrUsernameForm, RemindUsernameForm,
-    ResendActivationCodeForm, ResendActivationCodeViaEmailForm, ChangeProfileForm, ChangeEmailForm,
+    ResendActivationCodeForm, ResendActivationCodeViaEmailForm, ChangeProfileForm, ChangeEmailForm, VerificationCodeForm,
 )
 from .models import Activation
 
@@ -69,21 +70,49 @@ class LogInView(GuestOnlyView, FormView):
         if request.session.test_cookie_worked():
             request.session.delete_test_cookie()
 
-        # The default Django's "remember me" lifetime is 2 weeks and can be changed by modifying
-        # the SESSION_COOKIE_AGE settings' option.
-        if settings.USE_REMEMBER_ME:
-            if not form.cleaned_data['remember_me']:
-                request.session.set_expiry(0)
+        user = form.user_cache
 
-        login(request, form.user_cache)
+        # Generate a random code and send it via email
+        code = get_random_string(6, allowed_chars='0123456789')
+        request.session['verification_code'] = code
+        request.session['user_id'] = user.id
+        send_verification_code_email(user.email, code)
 
-        redirect_to = request.POST.get(REDIRECT_FIELD_NAME, request.GET.get(REDIRECT_FIELD_NAME))
-        url_is_safe = is_safe_url(redirect_to, allowed_hosts=request.get_host(), require_https=request.is_secure())
+        return redirect('accounts:verify_code')
 
-        if url_is_safe:
-            return redirect(redirect_to)
+    def form_invalid(self, form):
+        # Ensure that the test cookie is set to prevent user lockout
+        self.request.session.set_test_cookie()
+        return super().form_invalid(form)
 
-        return redirect(settings.LOGIN_REDIRECT_URL)
+    
+class VerifyCodeView(GuestOnlyView, FormView):
+    template_name = 'accounts/verify_code.html'
+    form_class = VerificationCodeForm
+
+    def form_valid(self, form):
+        request = self.request
+        code = form.cleaned_data['code']
+        if code == request.session.get('verification_code'):
+            user_id = request.session.get('user_id')
+            user = get_object_or_404(User, id=user_id)
+            login(request, user)
+
+            # Clear session data
+            del request.session['verification_code']
+            del request.session['user_id']
+
+            redirect_to = request.POST.get(REDIRECT_FIELD_NAME, request.GET.get(REDIRECT_FIELD_NAME))
+            url_is_safe = is_safe_url(redirect_to, allowed_hosts=request.get_host(), require_https=request.is_secure())
+
+            if url_is_safe:
+                return redirect(redirect_to)
+
+            return redirect(settings.LOGIN_REDIRECT_URL)
+        else:
+            messages.error(request, _('Invalid verification code.'))
+            return redirect('accounts:verify_code')
+
 
 
 class SignUpView(GuestOnlyView, FormView):

@@ -1,0 +1,14 @@
+{% extends 'layouts/default/page.html' %}
+
+{% load bootstrap4 %}
+{% load i18n %}
+
+
+{% block content %}
+<h2>{% trans "Enter Verification Code" %}</h2>
+<form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">{% trans "Verify" %}</button>
+</form>
+{% endblock %}
